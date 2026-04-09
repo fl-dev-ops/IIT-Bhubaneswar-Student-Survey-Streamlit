@@ -1,26 +1,32 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
+from streamlit_echarts import st_echarts
 
-from main import (
-    CHART_COLORS,
-    DEPARTMENT_RENAMES,
-    DEFAULT_CSV,
-    PROGRAM_ORDER,
-    department_company_frame,
-    dream_attainability_frame,
-    distribution_frame,
-    exploded_list_frame,
-    heatmap_options,
-    load_csv_from_path,
-    pie_chart_options,
-    program_year_sunburst_options,
-    relation_frame,
-    relation_heatmap_frame,
-    relation_sunburst_options,
-    st_echarts,
-)
+import utils
+
+DEFAULT_CSV = Path(__file__).parent / "IIT_Bhubaneswar_109_Student_Responses.csv"
+
+
+def load_csv_from_path(path: str) -> pd.DataFrame:
+    df = pd.read_csv(path, encoding="utf-8", encoding_errors="ignore")
+    cols = {
+        "Timestamp": "Timestamp",
+        "Department": "Department",
+        "Which year are you in?": "Year",
+        "How much do you know about placements in your department? Name some companies that usually come, job roles your seniors have got, anything you know.": "Placement Awareness",
+        "Which companies are you aiming for, and what is your dream job?": "Dream Company",
+        "What type of role are you targeting?": "Dream Role",
+        "Where do you get information about jobs and careers?": "Info Sources",
+        "When you imagine yourself five years from now in your ideal role, what does that look like?": "Dream Role Detail",
+        "What is your biggest fear about placements?": "Fear Factor",
+        "If you do not get placed on campus, what is your backup plan?": "Backup Plan",
+        "What kind of help would give you more confidence going into an actual interview?": "Support Needed",
+    }
+    return df.rename(columns=cols)
 
 
 def metric_rate(numerator: int, denominator: int) -> str:
@@ -32,7 +38,9 @@ def metric_rate(numerator: int, denominator: int) -> str:
 def normalize_departments(data: pd.DataFrame) -> pd.DataFrame:
     normalized = data.copy()
     if "Department" in normalized.columns:
-        normalized["Department"] = normalized["Department"].replace(DEPARTMENT_RENAMES)
+        normalized["Department"] = normalized["Department"].replace(
+            utils.DEPARTMENT_RENAMES
+        )
     return normalized
 
 
@@ -48,7 +56,7 @@ def normalized_doughnut_options(data: pd.DataFrame, column: str, title: str) -> 
     chart_data["Percent"] = (chart_data["Count"] / total * 100).round(1) if total else 0
 
     return {
-        "color": CHART_COLORS,
+        "color": utils.CHART_COLORS,
         "title": {"text": title, "left": "center"},
         "tooltip": {"trigger": "item", "formatter": "{b}: {c}%"},
         "legend": {"right": "0%", "top": "35%", "orient": "vertical"},
@@ -95,7 +103,7 @@ def normalized_relation_sunburst_options(
     grouped["Percent"] = (grouped["Count"] / parent_totals * 100).round(1)
 
     return {
-        "color": CHART_COLORS,
+        "color": utils.CHART_COLORS,
         "title": {"text": title, "left": "center"},
         "tooltip": {"trigger": "item", "formatter": "{b}: {c}%"},
         "series": [
@@ -157,15 +165,15 @@ def render_cohort_section(data: pd.DataFrame) -> None:
 
     left, right = st.columns(2)
     with left:
-        dept_data = distribution_frame(data, "Department")
+        dept_data = utils.distribution_frame(data, "Department")
         st_echarts(
-            options=pie_chart_options(dept_data, "Department", "Department"),
+            options=utils.pie_chart_options(dept_data, "Department", "Department"),
             height="520px",
             key="insights-department-donut",
         )
     with right:
         st_echarts(
-            options=program_year_sunburst_options(data, "Program and Year"),
+            options=utils.program_year_sunburst_options(data, "Program and Year"),
             height="520px",
             key="insights-program-year-sunburst",
         )
@@ -186,13 +194,13 @@ def render_readiness_section(data: pd.DataFrame) -> None:
     )
 
     st_echarts(
-        options=heatmap_options(
+        options=utils.heatmap_options(
             relation,
             "Program",
             "Interview Exposure Detail",
             "Count",
             "",
-            x_order=PROGRAM_ORDER,
+            x_order=utils.PROGRAM_ORDER,
             y_order=[
                 "No interviews yet",
                 "1-3 interviews",
@@ -214,8 +222,8 @@ def render_barrier_section(data: pd.DataFrame) -> None:
 
     left, right = st.columns(2)
     with left:
-        fear_data = distribution_frame(
-            exploded_list_frame(data, "Fear Factor", "Fear Item"),
+        fear_data = utils.distribution_frame(
+            utils.exploded_list_frame(data, "Fear Factor", "Fear Item"),
             "Fear Item",
         )
         st_echarts(
@@ -228,8 +236,8 @@ def render_barrier_section(data: pd.DataFrame) -> None:
             key="insights-fear-donut",
         )
     with right:
-        support_data = distribution_frame(
-            exploded_list_frame(data, "Support Needed", "Support Item"),
+        support_data = utils.distribution_frame(
+            utils.exploded_list_frame(data, "Support Needed", "Support Item"),
             "Support Item",
         )
         st_echarts(
@@ -242,7 +250,7 @@ def render_barrier_section(data: pd.DataFrame) -> None:
             key="insights-support-donut",
         )
 
-    fear_support = relation_frame(
+    fear_support = utils.relation_frame(
         data, "Fear Factor", "Support Needed", "Fear", "Support"
     )
     fear_support_heatmap = (
@@ -254,7 +262,7 @@ def render_barrier_section(data: pd.DataFrame) -> None:
     ).round(1)
 
     st_echarts(
-        options=heatmap_options(
+        options=utils.heatmap_options(
             fear_support_heatmap,
             "Support",
             "Fear",
@@ -283,7 +291,7 @@ def render_barrier_section(data: pd.DataFrame) -> None:
 
     render_centered_chart(
         {
-            "color": CHART_COLORS,
+            "color": utils.CHART_COLORS,
             "title": {"text": "Fear to Support Pathways", "left": "center"},
             "tooltip": {"trigger": "item", "formatter": "{b}: {c}%"},
             "series": [
@@ -313,12 +321,14 @@ def render_information_section(data: pd.DataFrame) -> None:
         "LinkedIn and seniors dominate across years, while the Career Development Cell (CDC) appears as one of several information sources rather than the only trusted channel."
     )
 
-    relation = relation_heatmap_frame(data, "Year", "Info Sources", "Year", "Source")
+    relation = utils.relation_heatmap_frame(
+        data, "Year", "Info Sources", "Year", "Source"
+    )
     relation["Year Label"] = relation["Year"].map(
         lambda value: f"Year {int(float(value))}"
     )
     st_echarts(
-        options=heatmap_options(
+        options=utils.heatmap_options(
             relation,
             "Year Label",
             "Source",
@@ -337,11 +347,11 @@ def render_attainability_section(data: pd.DataFrame) -> None:
         "This view estimates whether students seem to have realistic access to their dream companies through their department's visible placement ecosystem. An exact match means the same company is already showing up in department-level placement mentions, a close match means similar companies from the same hiring cluster are visible, and a gap means that access signal is weak or missing."
     )
 
-    dream_relation = relation_frame(
+    dream_relation = utils.relation_frame(
         data, "Department", "Dream Role", "Department", "Dream Company"
     )
-    placement_relation = department_company_frame(data)
-    attainability = dream_attainability_frame(data)
+    placement_relation = utils.department_company_frame(data)
+    attainability = utils.dream_attainability_frame(data)
     summary = (
         attainability.groupby(["Department", "Match Quality"])
         .size()
@@ -377,7 +387,7 @@ def render_attainability_section(data: pd.DataFrame) -> None:
     left, right = st.columns(2)
     with left:
         st_echarts(
-            options=heatmap_options(
+            options=utils.heatmap_options(
                 summary,
                 "Match Quality",
                 "Department",
@@ -407,7 +417,7 @@ def render_attainability_section(data: pd.DataFrame) -> None:
         ).round(1)
         st_echarts(
             options={
-                "color": CHART_COLORS,
+                "color": utils.CHART_COLORS,
                 "title": {
                     "text": "Department to Dream Company Access",
                     "left": "center",
@@ -458,7 +468,7 @@ def render_attainability_section(data: pd.DataFrame) -> None:
     )
     render_centered_chart(
         {
-            "color": CHART_COLORS,
+            "color": utils.CHART_COLORS,
             "title": {"text": "Overall Dream Company Access", "left": "center"},
             "tooltip": {"trigger": "item", "formatter": "{b}: {c}%"},
             "legend": {"right": "0%", "top": "35%", "orient": "vertical"},
