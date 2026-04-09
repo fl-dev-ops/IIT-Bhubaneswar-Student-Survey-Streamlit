@@ -139,13 +139,22 @@ def relation_frame(
     right_label: str,
 ) -> pd.DataFrame:
     left_exploded = _explode_column(data, left_column)
-    right_exploded = _explode_column(data, right_column)
     left_exploded = left_exploded.rename(columns={left_column: left_label})
+
+    right_exploded = _explode_column(data, right_column)
     right_exploded = right_exploded.rename(columns={right_column: right_label})
-    combined = pd.merge(
-        left_exploded, right_exploded, left_index=True, right_index=True
+
+    # Reset index to align rows properly after explode
+    left_exploded = left_exploded.reset_index(drop=True)
+    right_exploded = right_exploded.reset_index(drop=True)
+
+    min_len = min(len(left_exploded), len(right_exploded))
+    return pd.DataFrame(
+        {
+            left_label: left_exploded[left_label].head(min_len),
+            right_label: right_exploded[right_label].head(min_len),
+        }
     )
-    return combined[[left_label, right_label]]
 
 
 def relation_heatmap_frame(
