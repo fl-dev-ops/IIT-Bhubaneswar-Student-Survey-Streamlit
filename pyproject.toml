@@ -1,0 +1,15 @@
+[project]
+name = "iitbbs"
+version = "0.1.0"
+description = "Streamlit explorer for IIT Bhubaneswar survey data"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pandas>=2.2.3",
+    "streamlit>=1.44.0",
+    "streamlit-echarts>=0.4.0",
+]
+
+[[tool.streamlit.component.components]]
+name = "streamlit-echarts.streamlit_echarts"
+asset_dir = ".venv/lib/python3.13/site-packages/streamlit_echarts/frontend/build"
