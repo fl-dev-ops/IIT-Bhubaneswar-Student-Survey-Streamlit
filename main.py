@@ -25,8 +25,29 @@ def load_csv_from_path(path: str) -> pd.DataFrame:
         "What is your biggest fear about placements?": "Fear Factor",
         "If you do not get placed on campus, what is your backup plan?": "Backup Plan",
         "What kind of help would give you more confidence going into an actual interview?": "Support Needed",
+        "Have you attended any mock or real interviews so far?": "Interview Attended",
+        "If yes, how many interviews have you attended?": "Interview Count",
+        "Do you want to self-assess yourself on where you currently stand with respect to interviews?": "Self Assessment",
+        "We are planning to pilot intervoo.ai for improving interview-practice & communication skills for IIT BHU students, to improve their placement performance. Would you be interested in participating?": "Pilot Interest",
     }
-    return df.rename(columns=cols)
+    df = df.rename(columns=cols)
+
+    # Derive computed columns
+    def extract_interview_detail(row):
+        attended = str(row.get("Interview Attended", "")).lower()
+        count = str(row.get("Interview Count", "")).lower()
+        if attended == "no" or attended == "never" or not attended.strip():
+            return "No interviews yet"
+        if count == "no" or not count.strip():
+            return "Interviewed (count unknown)"
+        if "1" in count or "2" in count or "3" in count:
+            return "1-3 interviews"
+        if "4" in count or "5" in count:
+            return "3-5 interviews"
+        return "More than 5 interviews"
+
+    df["Interview Exposure Detail"] = df.apply(extract_interview_detail, axis=1)
+    return df
 
 
 def metric_rate(numerator: int, denominator: int) -> str:
