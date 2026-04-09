@@ -195,7 +195,7 @@ def pie_chart_options(data: pd.DataFrame, column: str, title: str) -> dict:
                 },
                 "labelLine": {"show": False},
                 "data": [
-                    {"name": row[column], "value": float(row["Percent"])}
+                    {"name": row["Category"], "value": float(row["Percent"])}
                     for _, row in chart_data.iterrows()
                 ],
             }

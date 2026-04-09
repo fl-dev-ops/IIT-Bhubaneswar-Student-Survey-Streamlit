@@ -103,7 +103,7 @@ def normalized_doughnut_options(data: pd.DataFrame, column: str, title: str) -> 
                 },
                 "labelLine": {"show": False},
                 "data": [
-                    {"name": row[column], "value": float(row["Percent"])}
+                    {"name": row["Category"], "value": float(row["Percent"])}
                     for _, row in chart_data.iterrows()
                 ],
             }
@@ -188,7 +188,7 @@ def render_cohort_section(data: pd.DataFrame) -> None:
     with left:
         dept_data = utils.distribution_frame(data, "Department")
         st_echarts(
-            options=utils.pie_chart_options(dept_data, "Department", "Department"),
+            options=utils.pie_chart_options(dept_data, "Category", "Department"),
             height="520px",
             key="insights-department-donut",
         )
@@ -250,7 +250,7 @@ def render_barrier_section(data: pd.DataFrame) -> None:
         st_echarts(
             options=normalized_doughnut_options(
                 fear_data,
-                "Fear Item",
+                "Category",
                 "Fear Factor",
             ),
             height="520px",
@@ -264,7 +264,7 @@ def render_barrier_section(data: pd.DataFrame) -> None:
         st_echarts(
             options=normalized_doughnut_options(
                 support_data,
-                "Support Item",
+                "Category",
                 "Help Students Are Asking For",
             ),
             height="520px",
