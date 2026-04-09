@@ -118,13 +118,9 @@ def _explode_column(df: pd.DataFrame, column: str) -> pd.DataFrame:
 
 
 def distribution_frame(data: pd.DataFrame, column: str) -> pd.DataFrame:
-    return (
-        data[column]
-        .dropna()
-        .value_counts()
-        .reset_index()
-        .rename(columns={column: "Category", 0: "Count"})
-    )
+    counts = data[column].dropna().value_counts().reset_index()
+    counts.columns = ["Category", "Count"]
+    return counts
 
 
 def exploded_list_frame(
