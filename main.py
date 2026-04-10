@@ -1349,8 +1349,19 @@ def heatmap_options(
                 "type": "heatmap",
                 "data": heatmap_data,
                 "label": {"show": True},
+                "itemStyle": {
+                    "borderColor": "#ffffff",
+                    "borderWidth": 6,
+                    "borderRadius": 10,
+                },
                 "emphasis": {
-                    "itemStyle": {"shadowBlur": 10, "shadowColor": "rgba(0, 0, 0, 0.5)"}
+                    "itemStyle": {
+                        "borderColor": "#ffffff",
+                        "borderWidth": 6,
+                        "borderRadius": 10,
+                        "shadowBlur": 10,
+                        "shadowColor": "rgba(0, 0, 0, 0.25)",
+                    }
                 },
             }
         ],
