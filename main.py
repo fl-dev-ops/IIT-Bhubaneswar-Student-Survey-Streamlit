@@ -911,7 +911,8 @@ def sunburst_options(data: pd.DataFrame, column: str, title: str) -> dict:
         "series": [
             {
                 "type": "sunburst",
-                "radius": ["20%", "88%"],
+                "center": ["50%", "55%"],
+                "radius": ["14%", "72%"],
                 "sort": None,
                 "itemStyle": {
                     "borderRadius": 4,
@@ -1038,7 +1039,8 @@ def program_year_sunburst_options(data: pd.DataFrame, title: str) -> dict:
         "series": [
             {
                 "type": "sunburst",
-                "radius": ["18%", "88%"],
+                "center": ["50%", "55%"],
+                "radius": ["14%", "72%"],
                 "sort": None,
                 "itemStyle": {
                     "borderRadius": 4,
@@ -1123,7 +1125,8 @@ def department_company_sunburst_options(data: pd.DataFrame, title: str) -> dict:
         "series": [
             {
                 "type": "sunburst",
-                "radius": ["18%", "88%"],
+                "center": ["50%", "55%"],
+                "radius": ["14%", "72%"],
                 "sort": None,
                 "itemStyle": {
                     "borderRadius": 4,
@@ -1276,6 +1279,9 @@ def relation_sunburst_options(
     parent_column: str,
     child_column: str,
     title: str,
+    *,
+    center: tuple[str, str] = ("50%", "55%"),
+    radius: tuple[str, str] = ("14%", "72%"),
 ) -> dict:
     return {
         "color": CHART_COLORS,
@@ -1284,7 +1290,8 @@ def relation_sunburst_options(
         "series": [
             {
                 "type": "sunburst",
-                "radius": ["18%", "88%"],
+                "center": list(center),
+                "radius": list(radius),
                 "sort": None,
                 "itemStyle": {
                     "borderRadius": 4,
@@ -1293,6 +1300,118 @@ def relation_sunburst_options(
                 },
                 "label": {"rotate": "radial"},
                 "data": hierarchy_from_relations(data, parent_column, child_column),
+            }
+        ],
+    }
+
+
+def relation_treemap_options(
+    data: pd.DataFrame,
+    parent_column: str,
+    child_column: str,
+    title: str,
+) -> dict:
+    tree = []
+    grouped = (
+        data.groupby([parent_column, child_column]).size().reset_index(name="Count")
+    )
+    for parent in grouped[parent_column].drop_duplicates().tolist():
+        parent_rows = grouped[grouped[parent_column] == parent].sort_values(
+            "Count", ascending=False
+        )
+        children = [
+            {"name": row[child_column], "value": int(row["Count"])}
+            for _, row in parent_rows.iterrows()
+        ]
+        tree.append({"name": parent, "children": children})
+
+    return {
+        "color": CHART_COLORS,
+        "title": {"text": title, "left": "center"},
+        "tooltip": {"trigger": "item"},
+        "series": [
+            {
+                "type": "treemap",
+                "top": 60,
+                "left": 20,
+                "right": 20,
+                "bottom": 20,
+                "breadcrumb": {"show": False},
+                "roam": False,
+                "nodeClick": False,
+                "label": {"show": True, "formatter": "{b}"},
+                "upperLabel": {"show": True, "height": 28},
+                "itemStyle": {
+                    "borderColor": "#ffffff",
+                    "borderWidth": 1,
+                    "borderRadius": 10,
+                    "gapWidth": 1,
+                },
+                "levels": [
+                    {
+                        "itemStyle": {
+                            "borderColor": "#ffffff",
+                            "borderWidth": 1,
+                            "borderRadius": 10,
+                            "gapWidth": 1,
+                        },
+                        "upperLabel": {"show": True, "height": 30},
+                    },
+                    {
+                        "itemStyle": {
+                            "borderColor": "#ffffff",
+                            "borderWidth": 1,
+                            "borderRadius": 10,
+                            "gapWidth": 1,
+                        }
+                    },
+                ],
+                "data": tree,
+            }
+        ],
+    }
+
+
+def relation_sankey_options(
+    data: pd.DataFrame,
+    source_column: str,
+    target_column: str,
+    value_column: str,
+    title: str,
+) -> dict:
+    sources = data[source_column].dropna().astype(str).unique().tolist()
+    targets = data[target_column].dropna().astype(str).unique().tolist()
+    nodes = [
+        {"name": f"source::{name}", "label": {"formatter": name}} for name in sources
+    ] + [{"name": f"target::{name}", "label": {"formatter": name}} for name in targets]
+    links = [
+        {
+            "source": f"source::{str(row[source_column])}",
+            "target": f"target::{str(row[target_column])}",
+            "value": float(row[value_column]),
+        }
+        for _, row in data.iterrows()
+    ]
+
+    return {
+        "color": CHART_COLORS,
+        "title": {"text": title, "left": "center"},
+        "tooltip": {"trigger": "item"},
+        "series": [
+            {
+                "type": "sankey",
+                "top": 60,
+                "bottom": 20,
+                "left": "12%",
+                "right": "12%",
+                "nodeWidth": 18,
+                "nodeGap": 14,
+                "nodeAlign": "justify",
+                "emphasis": {"focus": "adjacency"},
+                "data": nodes,
+                "links": links,
+                "lineStyle": {"color": "source", "curveness": 0.5, "opacity": 0.35},
+                "label": {"color": "inherit", "fontSize": 13, "distance": 8},
             }
         ],
     }
@@ -1534,7 +1653,7 @@ def render_department_company_section(data: pd.DataFrame) -> None:
                 "Department to Company Sunburst",
             ),
             height="800px",
-            width="800px",
+            width="100%",
             key="department-company-sunburst",
         )
 
@@ -1657,7 +1776,7 @@ def render_fear_support_section(data: pd.DataFrame) -> None:
                 "Fear to Support Sunburst",
             ),
             height="900px",
-            width="900px",
+            width="100%",
             key="fear-support-sunburst",
         )
 
@@ -1748,19 +1867,19 @@ def render_department_dream_section(data: pd.DataFrame) -> None:
     relation = relation[relation["Company"].isin(top_companies)]
 
     st.subheader("Department x Dream Companies")
-    left_spacer, center_column, right_spacer = st.columns([1, 2, 1])
-    with center_column:
-        st_echarts(
-            options=relation_sunburst_options(
-                relation,
-                "Department",
-                "Company",
-                "Department to Dream Companies",
-            ),
-            height="900px",
-            width="900px",
-            key="department-dream-sunburst",
-        )
+    st_echarts(
+        options=relation_sunburst_options(
+            relation,
+            "Department",
+            "Company",
+            "Department to Dream Companies",
+            center=("50%", "55%"),
+            radius=("14%", "72%"),
+        ),
+        height="900px",
+        width="100%",
+        key="department-dream-sunburst",
+    )
 
 
 def render_dream_attainability_section(data: pd.DataFrame) -> None:
@@ -2074,49 +2193,21 @@ def render_barrier_section(data: pd.DataFrame) -> None:
             "Percent",
             "Fear to Support Heatmap",
         ),
-        height="560px",
+        height="720px",
         key="insights-fear-support-heatmap",
     )
 
-    normalized_pathways = []
-    for fear in fear_support_heatmap["Fear"].drop_duplicates().tolist():
-        fear_rows = fear_support_heatmap[fear_support_heatmap["Fear"] == fear]
-        normalized_pathways.append(
-            {
-                "name": fear,
-                "children": [
-                    {
-                        "name": row["Support"],
-                        "value": float(row["Percent"]),
-                    }
-                    for _, row in fear_rows.iterrows()
-                ],
-            }
-        )
-
-    render_centered_chart(
-        {
-            "color": CHART_COLORS,
-            "title": {"text": "Fear to Support Pathways", "left": "center"},
-            "tooltip": {"trigger": "item", "formatter": "{b}: {c}%"},
-            "series": [
-                {
-                    "type": "sunburst",
-                    "radius": ["18%", "88%"],
-                    "sort": None,
-                    "itemStyle": {
-                        "borderRadius": 4,
-                        "borderWidth": 2,
-                        "borderColor": "#fff",
-                    },
-                    "label": {"rotate": "radial"},
-                    "data": normalized_pathways,
-                }
-            ],
-        },
-        height="900px",
-        width="900px",
-        key="insights-fear-support-sunburst",
+    st_echarts(
+        options=relation_sankey_options(
+            fear_support_heatmap,
+            "Fear",
+            "Support",
+            "Percent",
+            "Fear to Support Sankey",
+        ),
+        height="760px",
+        width="100%",
+        key="insights-fear-support-sankey",
     )
 
 
@@ -2141,7 +2232,7 @@ def render_information_section(data: pd.DataFrame) -> None:
             "Year x Info Sources",
             x_order=["Year 1", "Year 2", "Year 3", "Year 4"],
         ),
-        height="540px",
+        height="680px",
         key="insights-year-info-heatmap",
     )
 
