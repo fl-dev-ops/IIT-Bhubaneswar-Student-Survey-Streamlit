@@ -15,7 +15,6 @@ from main import (
     render_fear_support_section,
     render_info_sources_section,
     render_interview_exposure_section,
-    render_overview_metrics,
     render_program_exposure_relation_section,
     render_program_year_section,
     render_support_needed_section,
@@ -36,7 +35,6 @@ def main() -> None:
     data = ensure_program_year(data)
 
     st.caption(f"Loaded: {source_name}")
-    render_overview_metrics(data)
     st.dataframe(data, width="stretch", hide_index=True)
     st.subheader("Column Legend")
     st.dataframe(
