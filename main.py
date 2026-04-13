@@ -899,6 +899,50 @@ def bar_chart_options(data: pd.DataFrame, column: str, title: str) -> dict:
     }
 
 
+def multicolor_bar_chart_options(
+    data: pd.DataFrame,
+    column: str,
+    title: str,
+    *,
+    value_column: str = "Count",
+    y_name: str = "Count",
+) -> dict:
+    labels = data[column].tolist()
+    values = data[value_column].tolist()
+    return {
+        "title": {"text": title, "left": "center"},
+        "tooltip": {"trigger": "axis", "axisPointer": {"type": "shadow"}},
+        "grid": {
+            "left": 40,
+            "right": 20,
+            "top": 60,
+            "bottom": 80,
+            "containLabel": True,
+        },
+        "xAxis": {
+            "type": "category",
+            "data": labels,
+            "axisLabel": {"interval": 0, "rotate": 20},
+        },
+        "yAxis": {"type": "value", "name": y_name},
+        "series": [
+            {
+                "type": "bar",
+                "data": [
+                    {
+                        "value": value,
+                        "itemStyle": {"color": CHART_COLORS[index % len(CHART_COLORS)]},
+                    }
+                    for index, value in enumerate(values)
+                ],
+                "barWidth": "55%",
+                "label": {"show": True, "position": "top"},
+                "itemStyle": {"borderRadius": [8, 8, 0, 0]},
+            }
+        ],
+    }
+
+
 def sunburst_options(data: pd.DataFrame, column: str, title: str) -> dict:
     children = [
         {"name": row[column], "value": int(row["Count"])} for _, row in data.iterrows()
@@ -2073,7 +2117,6 @@ def horizontal_bar_options(
     labels = data[column].tolist()
     values = data[value_column].tolist()
     return {
-        "color": [CHART_COLORS[0]],
         "title": {"text": title, "left": "center"},
         "tooltip": {
             "trigger": "axis",
@@ -2092,7 +2135,13 @@ def horizontal_bar_options(
         "series": [
             {
                 "type": "bar",
-                "data": values,
+                "data": [
+                    {
+                        "value": value,
+                        "itemStyle": {"color": CHART_COLORS[index % len(CHART_COLORS)]},
+                    }
+                    for index, value in enumerate(values)
+                ],
                 "barWidth": "60%",
                 "label": {
                     "show": True,
@@ -2274,6 +2323,17 @@ def salary_by_role_percent_frame(data: pd.DataFrame) -> pd.DataFrame:
     return grouped
 
 
+def salary_by_role_top_band_frame(data: pd.DataFrame) -> pd.DataFrame:
+    relation = relation_frame(
+        data, "Role Categories", "Salary Expectation", "Role", "Salary"
+    )
+    if relation.empty:
+        return pd.DataFrame(columns=["Role", "Count"])
+    grouped = relation.groupby(["Role", "Salary"]).size().reset_index(name="Count")
+    top_band = grouped[grouped["Salary"] == "▾ 10 LPA and above"].copy()
+    return top_band.sort_values("Count", ascending=False)[["Role", "Count"]]
+
+
 def english_video_frame(data: pd.DataFrame) -> pd.DataFrame:
     if not {"English Level", "Video Confidence"}.issubset(data.columns):
         return pd.DataFrame(columns=["English Level", "Video Confidence", "Count"])
@@ -2393,7 +2453,7 @@ def render_aiming_section(data: pd.DataFrame) -> None:
             }
         )
     )
-    salary_role = salary_by_role_percent_frame(data)
+    salary_role = salary_by_role_top_band_frame(data)
     st_echarts(
         options=single_stacked_bar_options(
             [
@@ -2406,15 +2466,12 @@ def render_aiming_section(data: pd.DataFrame) -> None:
         key="home-salary-overall",
     )
     st_echarts(
-        options=stacked_bar_value_options(
+        options=multicolor_bar_chart_options(
             salary_role,
             "Role",
-            "Salary",
-            "Percent",
-            "Salary Expectation by Role Category",
-            series_order=["▾ 10 LPA and above", "▾ 5–10 LPA", "Below 5 LPA"],
-            value_suffix="%",
-            y_name="% within role",
+            "10 LPA+ Expectation by Role Category",
+            value_column="Count",
+            y_name="Students",
         ),
         height="420px",
         key="home-salary-role",
