@@ -2061,353 +2061,480 @@ def normalized_relation_sunburst_options(
     }
 
 
-def render_header(data: pd.DataFrame) -> None:
-    total = len(data)
-    no_interviews = int(data["Interview Exposure Detail"].eq("No interviews yet").sum())
-    pilot_yes = int(data["Pilot Interest"].eq("Yes — Interested").sum())
-    need_self_assess = int(data["Self Assessment"].eq("Yes").sum())
-
-    st.title("Survey Insights")
-    st.caption("A storytelling view of the cleaned IIT Bhubaneswar survey data.")
-
-    cards = st.columns(4)
-    cards[0].metric("Responses", f"{total}")
-    cards[1].metric("No interviews yet", metric_rate(no_interviews, total))
-    cards[2].metric("Interested in pilot", metric_rate(pilot_yes, total))
-    cards[3].metric("Want self-assessment", metric_rate(need_self_assess, total))
-
-    st.info(
-        "The strongest signal is a readiness gap: most students want help now, many have never faced interviews yet, and mock interviews emerge as the central requested intervention."
-    )
-
-
-def render_cohort_section(data: pd.DataFrame) -> None:
-    st.header("Who Responded")
-    st.write(
-        "The sample is dominated by Mechanical and CS students, with UG students forming the bulk of the population."
-    )
-
-    left, right = st.columns(2)
-    with left:
-        dept_data = distribution_frame(data, "Department")
-        st_echarts(
-            options=pie_chart_options(dept_data, "Department", "Department"),
-            height="520px",
-            key="insights-department-donut",
-        )
-    with right:
-        st_echarts(
-            options=program_year_sunburst_options(data, "Program and Year"),
-            height="520px",
-            key="insights-program-year-sunburst",
-        )
-
-
-def render_readiness_section(data: pd.DataFrame) -> None:
-    st.header("Readiness Gap")
-    st.write(
-        "UG students appear to be the group most hungry for interview exposure: they make up the largest pool of students who have not yet faced interviews, which makes them the clearest audience for structured mock-interview support."
-    )
-
-    relation = (
-        data[["Program", "Interview Exposure Detail"]]
-        .dropna()
-        .groupby(["Program", "Interview Exposure Detail"])
-        .size()
-        .reset_index(name="Count")
-    )
-
-    st_echarts(
-        options=heatmap_options(
-            relation,
-            "Program",
-            "Interview Exposure Detail",
-            "Count",
-            "",
-            x_order=PROGRAM_ORDER,
-            y_order=[
-                "No interviews yet",
-                "1-3 interviews",
-                "3-5 interviews",
-                "More than 5 interviews",
-                "Interviewed (count unknown)",
-            ],
-        ),
-        height="540px",
-        key="insights-program-exposure-heatmap",
-    )
-
-
-def render_barrier_section(data: pd.DataFrame) -> None:
-    st.header("Barriers and Help")
-    st.write(
-        "The survey points to a tight loop: fear about interviews, placement outcomes, and communication maps directly to a request for mock interviews, guidance, and communication support."
-    )
-
-    left, right = st.columns(2)
-    with left:
-        fear_data = distribution_frame(
-            exploded_list_frame(data, "Fear Categories", "Fear Item"),
-            "Fear Item",
-        )
-        st_echarts(
-            options=normalized_doughnut_options(
-                fear_data,
-                "Fear Item",
-                "Fear Factor",
-            ),
-            height="520px",
-            key="insights-fear-donut",
-        )
-    with right:
-        support_data = distribution_frame(
-            exploded_list_frame(data, "Support Categories", "Support Item"),
-            "Support Item",
-        )
-        st_echarts(
-            options=normalized_doughnut_options(
-                support_data,
-                "Support Item",
-                "Help Students Are Asking For",
-            ),
-            height="520px",
-            key="insights-support-donut",
-        )
-
-    fear_support = relation_frame(
-        data, "Fear Categories", "Support Categories", "Fear", "Support"
-    )
-    fear_support_heatmap = (
-        fear_support.groupby(["Fear", "Support"]).size().reset_index(name="Count")
-    )
-    fear_totals = fear_support_heatmap.groupby("Fear")["Count"].transform("sum")
-    fear_support_heatmap["Percent"] = (
-        fear_support_heatmap["Count"] / fear_totals * 100
-    ).round(1)
-
-    st_echarts(
-        options=heatmap_options(
-            fear_support_heatmap,
-            "Support",
-            "Fear",
-            "Percent",
-            "Fear to Support Heatmap",
-        ),
-        height="720px",
-        key="insights-fear-support-heatmap",
-    )
-
-    st_echarts(
-        options=relation_sankey_options(
-            fear_support_heatmap,
-            "Fear",
-            "Support",
-            "Percent",
-            "Fear to Support Sankey",
-        ),
-        height="760px",
-        width="100%",
-        key="insights-fear-support-sankey",
-    )
-
-
-def render_information_section(data: pd.DataFrame) -> None:
-    st.header("Information Pathways")
-    st.write(
-        "LinkedIn and seniors dominate across years, while the Career Development Cell (CDC) appears as one of several information sources rather than the only trusted channel."
-    )
-
-    relation = relation_heatmap_frame(
-        data, "Year", "Info Source Categories", "Year", "Source"
-    )
-    relation["Year Label"] = relation["Year"].map(
-        lambda value: f"Year {int(float(value))}"
-    )
-    st_echarts(
-        options=heatmap_options(
-            relation,
-            "Year Label",
-            "Source",
-            "Count",
-            "Year x Info Sources",
-            x_order=["Year 1", "Year 2", "Year 3", "Year 4"],
-        ),
-        height="680px",
-        key="insights-year-info-heatmap",
-    )
-
-
-def render_attainability_section(data: pd.DataFrame) -> None:
-    st.header("Dream Companies & Accessibility")
-    st.write(
-        "This view estimates whether students seem to have realistic access to their dream companies through their department's visible placement ecosystem. An exact match means the same company is already showing up in department-level placement mentions, a close match means similar companies from the same hiring cluster are visible, and a gap means that access signal is weak or missing."
-    )
-
-    dream_relation = relation_frame(
-        data, "Department", "Dream Companies", "Department", "Dream Company"
-    )
-    placement_relation = department_company_frame(data)
-    attainability = dream_attainability_frame(data)
-    summary = (
-        attainability.groupby(["Department", "Match Quality"])
-        .size()
-        .reset_index(name="Count")
-    )
-    department_totals = summary.groupby("Department")["Count"].transform("sum")
-    summary["Percent"] = (summary["Count"] / department_totals * 100).round(1)
-
-    left, right = st.columns(2)
-    with left:
-        st_echarts(
-            options=normalized_relation_sunburst_options(
-                dream_relation,
-                "Department",
-                "Dream Company",
-                "Dream Companies by Department",
-            ),
-            height="560px",
-            key="insights-dream-companies-sunburst",
-        )
-    with right:
-        st_echarts(
-            options=normalized_relation_sunburst_options(
-                placement_relation,
-                "Department",
-                "Company",
-                "Placement Company Access by Department",
-            ),
-            height="560px",
-            key="insights-placement-companies-sunburst",
-        )
-
-    left, right = st.columns(2)
-    with left:
-        st_echarts(
-            options=heatmap_options(
-                summary,
-                "Match Quality",
-                "Department",
-                "Percent",
-                "Dream Company Access by Department",
-                x_order=["Exact Match", "Close Match", "Gap"],
-            ),
-            height="540px",
-            key="insights-attainability-heatmap",
-        )
-    with right:
-        normalized_attainability = attainability.merge(
-            attainability.groupby("Department").size().rename("Department Total"),
-            on="Department",
-        )
-        normalized_attainability = (
-            normalized_attainability.groupby(
-                ["Department", "Match Quality", "Department Total"]
-            )
-            .size()
-            .reset_index(name="Count")
-        )
-        normalized_attainability["Percent Label"] = (
-            normalized_attainability["Count"]
-            / normalized_attainability["Department Total"]
-            * 100
-        ).round(1)
-        st_echarts(
-            options={
-                "color": CHART_COLORS,
-                "title": {
-                    "text": "Department to Dream Company Access",
-                    "left": "center",
-                },
-                "tooltip": {"trigger": "item", "formatter": "{b}: {c}%"},
-                "series": [
-                    {
-                        "type": "sunburst",
-                        "radius": ["18%", "88%"],
-                        "sort": None,
-                        "itemStyle": {
-                            "borderRadius": 4,
-                            "borderWidth": 2,
-                            "borderColor": "#fff",
-                        },
-                        "label": {"rotate": "radial"},
-                        "data": [
-                            {
-                                "name": department,
-                                "children": [
-                                    {
-                                        "name": row["Match Quality"],
-                                        "value": float(row["Percent Label"]),
-                                    }
-                                    for _, row in normalized_attainability[
-                                        normalized_attainability["Department"]
-                                        == department
-                                    ].iterrows()
-                                ],
-                            }
-                            for department in normalized_attainability["Department"]
-                            .drop_duplicates()
-                            .tolist()
-                        ],
-                    }
-                ],
-            },
-            height="540px",
-            key="insights-attainability-sunburst",
-        )
-
-    access_summary = (
-        attainability.groupby("Match Quality").size().reset_index(name="Count")
-    )
-    total_access = int(access_summary["Count"].sum())
-    access_summary["Percent"] = (
-        (access_summary["Count"] / total_access * 100).round(1) if total_access else 0
-    )
-    render_centered_chart(
-        {
-            "color": CHART_COLORS,
-            "title": {"text": "Overall Dream Company Access", "left": "center"},
-            "tooltip": {"trigger": "item", "formatter": "{b}: {c}%"},
-            "legend": {"right": "0%", "top": "35%", "orient": "vertical"},
-            "series": [
-                {
-                    "type": "pie",
-                    "radius": ["40%", "70%"],
-                    "center": ["40%", "55%"],
-                    "avoidLabelOverlap": False,
-                    "itemStyle": {
-                        "borderRadius": 10,
-                        "borderColor": "#fff",
-                        "borderWidth": 2,
-                    },
-                    "label": {"show": False, "position": "center"},
-                    "emphasis": {
-                        "label": {
-                            "show": True,
-                            "fontSize": 28,
-                            "fontWeight": "bold",
-                            "formatter": "{b}\n{c}%",
-                        }
-                    },
-                    "labelLine": {"show": False},
-                    "data": [
-                        {
-                            "name": row["Match Quality"],
-                            "value": float(row["Percent"]),
-                        }
-                        for _, row in access_summary.iterrows()
-                    ],
-                }
-            ],
+def horizontal_bar_options(
+    data: pd.DataFrame,
+    column: str,
+    title: str,
+    *,
+    value_column: str = "Count",
+    x_name: str = "Count",
+    suffix: str = "",
+) -> dict:
+    labels = data[column].tolist()
+    values = data[value_column].tolist()
+    return {
+        "color": [CHART_COLORS[0]],
+        "title": {"text": title, "left": "center"},
+        "tooltip": {
+            "trigger": "axis",
+            "axisPointer": {"type": "shadow"},
+            "valueFormatter": f"{{value}}{suffix}",
         },
-        height="640px",
-        width="640px",
-        key="insights-attainability-donut",
+        "grid": {
+            "left": 170,
+            "right": 30,
+            "top": 60,
+            "bottom": 30,
+            "containLabel": True,
+        },
+        "xAxis": {"type": "value", "name": x_name},
+        "yAxis": {"type": "category", "data": labels, "inverse": True},
+        "series": [
+            {
+                "type": "bar",
+                "data": values,
+                "barWidth": "60%",
+                "label": {
+                    "show": True,
+                    "position": "right",
+                    "formatter": f"{{c}}{suffix}",
+                },
+                "itemStyle": {"borderRadius": [0, 8, 8, 0]},
+            }
+        ],
+    }
+
+
+def ranked_horizontal_bar_options(
+    data: pd.DataFrame,
+    label_column: str,
+    value_column: str,
+    title: str,
+    *,
+    suffix: str = "",
+    color_count: int | None = None,
+) -> dict:
+    labels = data[label_column].tolist()
+    values = data[value_column].tolist()
+    colors = CHART_COLORS[: color_count or len(values)]
+    return {
+        "title": {"text": title, "left": "center"},
+        "tooltip": {
+            "trigger": "axis",
+            "axisPointer": {"type": "shadow"},
+            "valueFormatter": f"{{value}}{suffix}",
+        },
+        "grid": {
+            "left": 180,
+            "right": 40,
+            "top": 60,
+            "bottom": 30,
+            "containLabel": True,
+        },
+        "xAxis": {"type": "value", "splitLine": {"show": False}},
+        "yAxis": {"type": "category", "data": labels, "inverse": True},
+        "series": [
+            {
+                "type": "bar",
+                "data": [
+                    {
+                        "value": value,
+                        "itemStyle": {"color": colors[index % len(colors)]},
+                    }
+                    for index, value in enumerate(values)
+                ],
+                "barWidth": "52%",
+                "showBackground": True,
+                "backgroundStyle": {"color": "rgba(127,127,127,0.12)"},
+                "label": {
+                    "show": True,
+                    "position": "right",
+                    "formatter": f"{{c}}{suffix}",
+                    "fontWeight": "bold",
+                },
+                "itemStyle": {"borderRadius": [0, 8, 8, 0]},
+            }
+        ],
+    }
+
+
+def single_stacked_bar_options(
+    items: list[tuple[str, float]],
+    title: str,
+    *,
+    x_name: str = "%",
+    suffix: str = "%",
+) -> dict:
+    return {
+        "color": CHART_COLORS,
+        "title": {"text": title, "left": "center"},
+        "tooltip": {
+            "trigger": "axis",
+            "axisPointer": {"type": "shadow"},
+            "valueFormatter": f"{{value}}{suffix}",
+        },
+        "legend": {"top": 28},
+        "grid": {
+            "left": 30,
+            "right": 30,
+            "top": 80,
+            "bottom": 40,
+            "containLabel": True,
+        },
+        "xAxis": {"type": "value", "name": x_name, "max": 100},
+        "yAxis": {"type": "category", "data": ["Overall"]},
+        "series": [
+            {
+                "name": label,
+                "type": "bar",
+                "stack": "total",
+                "label": {
+                    "show": value >= 8,
+                    "formatter": f"{{c}}{suffix}",
+                    "color": "#fff",
+                    "fontWeight": "bold",
+                },
+                "emphasis": {"focus": "series"},
+                "data": [value],
+            }
+            for label, value in items
+        ],
+    }
+
+
+def stacked_bar_value_options(
+    data: pd.DataFrame,
+    x_column: str,
+    series_column: str,
+    value_column: str,
+    title: str,
+    *,
+    x_order: list[str] | None = None,
+    series_order: list[str] | None = None,
+    value_suffix: str = "",
+    y_name: str = "Count",
+) -> dict:
+    if data.empty:
+        return {}
+
+    x_values = x_order or data[x_column].drop_duplicates().tolist()
+    series_values = series_order or data[series_column].drop_duplicates().tolist()
+    series = []
+    for series_value in series_values:
+        series_slice = data[data[series_column] == series_value].set_index(x_column)
+        series.append(
+            {
+                "name": series_value,
+                "type": "bar",
+                "stack": "total",
+                "emphasis": {"focus": "series"},
+                "data": [
+                    float(series_slice[value_column].get(x_value, 0))
+                    for x_value in x_values
+                ],
+            }
+        )
+
+    return {
+        "color": CHART_COLORS,
+        "title": {"text": title, "left": "center"},
+        "tooltip": {
+            "trigger": "axis",
+            "axisPointer": {"type": "shadow"},
+            "valueFormatter": f"{{value}}{value_suffix}",
+        },
+        "legend": {"top": 28},
+        "grid": {
+            "left": 50,
+            "right": 30,
+            "top": 80,
+            "bottom": 60,
+            "containLabel": True,
+        },
+        "xAxis": {
+            "type": "category",
+            "data": x_values,
+            "axisLabel": {"rotate": 20, "interval": 0},
+        },
+        "yAxis": {"type": "value", "name": y_name},
+        "series": series,
+    }
+
+
+def salary_by_role_percent_frame(data: pd.DataFrame) -> pd.DataFrame:
+    relation = relation_frame(
+        data, "Role Categories", "Salary Expectation", "Role", "Salary"
+    )
+    if relation.empty:
+        return pd.DataFrame(columns=["Role", "Salary", "Percent"])
+    grouped = relation.groupby(["Role", "Salary"]).size().reset_index(name="Count")
+    grouped["Percent"] = (
+        grouped["Count"] / grouped.groupby("Role")["Count"].transform("sum") * 100
+    ).round(1)
+    return grouped
+
+
+def english_video_frame(data: pd.DataFrame) -> pd.DataFrame:
+    if not {"English Level", "Video Confidence"}.issubset(data.columns):
+        return pd.DataFrame(columns=["English Level", "Video Confidence", "Count"])
+    return (
+        data[["English Level", "Video Confidence"]]
+        .dropna()
+        .groupby(["English Level", "Video Confidence"])
+        .size()
+        .reset_index(name="Count")
+    )
+
+
+def cgpa_confidence_gap_frame(
+    data: pd.DataFrame,
+) -> tuple[pd.DataFrame, float | None, float | None]:
+    if "CGPA" not in data.columns:
+        return pd.DataFrame(columns=["CGPA Band", "Percent", "Count"]), None, None
+
+    frame = data.copy()
+    frame["CGPA Numeric"] = pd.to_numeric(frame["CGPA"], errors="coerce")
+    frame = frame.dropna(subset=["CGPA Numeric"])
+    if frame.empty:
+        return pd.DataFrame(columns=["CGPA Band", "Percent", "Count"]), None, None
+
+    def band(value: float) -> str:
+        if value < 7.0:
+            return "Low < 7.0"
+        if value < 8.0:
+            return "Mid 7.0–7.9"
+        if value < 9.0:
+            return "Good 8.0–8.9"
+        return "High 9.0+"
+
+    frame["CGPA Band"] = frame["CGPA Numeric"].map(band)
+    frame["Comm Fear"] = (
+        frame["Fear Categories"]
+        .fillna("")
+        .str.contains("Communication / English", regex=False)
+    )
+    grouped = frame.groupby("CGPA Band").agg(
+        Count=("Comm Fear", "size"),
+        Percent=("Comm Fear", "mean"),
+    )
+    grouped["Percent"] = (grouped["Percent"] * 100).round(1)
+    grouped = grouped.reset_index()
+    order = ["Low < 7.0", "Mid 7.0–7.9", "Good 8.0–8.9", "High 9.0+"]
+    grouped["order"] = grouped["CGPA Band"].map(
+        {label: i for i, label in enumerate(order)}
+    )
+    grouped = grouped.sort_values("order").drop(columns="order")
+
+    avg_fear = frame.loc[frame["Comm Fear"], "CGPA Numeric"].mean()
+    avg_not_fear = frame.loc[~frame["Comm Fear"], "CGPA Numeric"].mean()
+    return grouped, avg_fear, avg_not_fear
+
+
+def render_home_header(data: pd.DataFrame) -> None:
+    st.title("Forever Learning Findings and Proposal for Placements Support")
+    st.caption(
+        "Survey-led homepage aligned to the presentation flow for IIT Bhubaneswar placements support."
+    )
+
+
+def hide_streamlit_sidebar() -> None:
+    st.markdown(
+        """
+        <style>
+        [data-testid="stSidebar"],
+        [data-testid="stSidebarNav"],
+        [data-testid="collapsedControl"] {
+            display: none !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_who_responded_section(data: pd.DataFrame) -> None:
+    st.header("Who were the respondents?")
+    total = len(data)
+    prep_now = metric_value(data, "Prep Start", "Right away")
+    cards = st.columns(2)
+    cards[0].metric("Students", total)
+    cards[1].metric("Want to start prep right away", metric_rate(prep_now, total))
+    dept_data = distribution_frame(data, "Department")
+    st_echarts(
+        options=ranked_horizontal_bar_options(
+            dept_data,
+            "Department",
+            "Count",
+            "Dept Composition (N=109)",
+            color_count=7,
+        ),
+        height="520px",
+        key="home-who-department",
+    )
+
+
+def render_aiming_section(data: pd.DataFrame) -> None:
+    st.header("What are their job aspirations?")
+    salary_data = distribution_frame(
+        data,
+        "Salary Expectation",
+        ["▾ 10 LPA and above", "▾ 5–10 LPA", "Below 5 LPA"],
+    )
+    salary_percent = (
+        salary_data.assign(Percent=lambda frame: (frame["Count"] / len(data) * 100).round(1))
+        [["Salary Expectation", "Percent"]]
+        .replace(
+            {
+                "Salary Expectation": {
+                    "▾ 10 LPA and above": "10 LPA+",
+                    "▾ 5–10 LPA": "5-10 LPA",
+                    "Below 5 LPA": "Below 5 LPA",
+                }
+            }
+        )
+    )
+    salary_role = salary_by_role_percent_frame(data)
+    st_echarts(
+        options=single_stacked_bar_options(
+            [
+                (row["Salary Expectation"], float(row["Percent"]))
+                for _, row in salary_percent.iterrows()
+            ],
+            "Realistic Salary Expectation",
+        ),
+        height="280px",
+        key="home-salary-overall",
+    )
+    st_echarts(
+        options=stacked_bar_value_options(
+            salary_role,
+            "Role",
+            "Salary",
+            "Percent",
+            "Salary Expectation by Role Category",
+            series_order=["▾ 10 LPA and above", "▾ 5–10 LPA", "Below 5 LPA"],
+            value_suffix="%",
+            y_name="% within role",
+        ),
+        height="420px",
+        key="home-salary-role",
+    )
+
+
+def render_seeking_section(data: pd.DataFrame) -> None:
+    st.header("What support do they seek?")
+    support_data = distribution_frame(
+        exploded_list_frame(data, "Support Categories", "Support Item"),
+        "Support Item",
+    )
+    support_data["Percent"] = (support_data["Count"] / len(data) * 100).round(1)
+    st_echarts(
+        options=horizontal_bar_options(
+            support_data,
+            "Support Item",
+            "Support Needs (% of students)",
+            value_column="Percent",
+            x_name="% of students",
+            suffix="%",
+        ),
+        height="520px",
+        key="home-support-bar",
+    )
+
+
+def render_self_assessment_section(data: pd.DataFrame) -> None:
+    st.header("What are their current mock experience?")
+    interviewed = metric_value(data, "Interview Exposure", "Yes")
+    pilot_interest = metric_value(data, "Pilot Interest", "Yes — Interested")
+    cards = st.columns(3)
+    cards[0].metric("Students", len(data))
+    cards[1].metric("Have mock experience", metric_rate(interviewed, len(data)))
+    cards[2].metric("Interested in intervoo.ai", metric_rate(pilot_interest, len(data)))
+    relation = (
+        data[["Program", "Interview Exposure"]]
+        .dropna()
+        .groupby(["Program", "Interview Exposure"])
+        .size()
+        .reset_index(name="Count")
+    )
+    totals = relation.groupby("Program")["Count"].transform("sum")
+    relation["Percent"] = (relation["Count"] / totals * 100).round(1)
+    interviewed_only = relation[relation["Interview Exposure"] == "Yes"].copy()
+    interviewed_only["Program"] = interviewed_only["Program"].replace({"PG": "M.Tech", "UG": "UG", "PhD": "PhD"})
+    st_echarts(
+        options=horizontal_bar_options(
+            interviewed_only.sort_values("Percent", ascending=False),
+            "Program",
+            "Programme Mock Experience",
+            value_column="Percent",
+            x_name="% with mock experience",
+            suffix="%",
+        ),
+        height="420px",
+        key="home-program-exposure",
+    )
+
+    st.markdown("")
+    st.subheader("What is their self-assessment in Language?")
+    english_data = distribution_frame(
+        data,
+        "English Level",
+        [
+            "Intermediate — I can hold a basic conversation but make mistakes.",
+            "Advanced — Fluent in most situations, minor gaps.",
+            "Beginner — I struggle to speak in English. Basic words only.",
+            "Native / Near-native — Fully comfortable speaking English.",
+        ],
+    )
+    english_data["English Label"] = english_data["English Level"].replace(
+        {
+            "Intermediate — I can hold a basic conversation but make mistakes.": "Intermediate",
+            "Advanced — Fluent in most situations, minor gaps.": "Advanced",
+            "Beginner — I struggle to speak in English. Basic words only.": "Beginner",
+            "Native / Near-native — Fully comfortable speaking English.": "Native",
+        }
+    )
+    english_data["Percent"] = (english_data["Count"] / len(data) * 100).round(1)
+    st_echarts(
+        options=horizontal_bar_options(
+            english_data,
+            "English Label",
+            "English Self-Rating",
+            value_column="Percent",
+            x_name="% of students",
+            suffix="%",
+        ),
+        height="420px",
+        key="home-english-level",
+    )
+
+    st.markdown("")
+    st.subheader("Does their CGPA help bridge the gap?")
+    cgpa_frame, avg_fear, avg_not_fear = cgpa_confidence_gap_frame(data)
+    if avg_fear is not None and avg_not_fear is not None:
+        st.caption(
+            f"Avg CGPA: {avg_fear:.2f} (fearful) vs {avg_not_fear:.2f} (not fearful) | gap: {abs(avg_not_fear - avg_fear):.2f}"
+        )
+    st_echarts(
+        options=horizontal_bar_options(
+            cgpa_frame,
+            "CGPA Band",
+            "Comm Fear % by CGPA Band",
+            value_column="Percent",
+            x_name="% with communication fear",
+            suffix="%",
+        ),
+        height="420px",
+        key="home-cgpa-gap",
     )
 
 
 def main() -> None:
-    st.set_page_config(page_title="IIT Bhubaneswar Student Survey", layout="wide")
-    st.title("IIT Bhubaneswar Student Survey")
+    st.set_page_config(
+        page_title="IIT Bhubaneswar Student Survey",
+        layout="wide",
+        initial_sidebar_state="collapsed",
+    )
 
     data, source_name = load_dataset()
     if data is None:
@@ -2415,18 +2542,16 @@ def main() -> None:
         return
 
     data = normalize_departments(ensure_program_year(data))
-    st.caption(f"Loaded: {source_name}")
-    render_header(data)
+    hide_streamlit_sidebar()
+    render_home_header(data)
     st.markdown("---")
-    render_cohort_section(data)
+    render_who_responded_section(data)
     st.markdown("---")
-    render_attainability_section(data)
+    render_aiming_section(data)
     st.markdown("---")
-    render_information_section(data)
+    render_seeking_section(data)
     st.markdown("---")
-    render_readiness_section(data)
-    st.markdown("---")
-    render_barrier_section(data)
+    render_self_assessment_section(data)
 
 
 if __name__ == "__main__":
