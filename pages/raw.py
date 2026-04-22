@@ -10,7 +10,6 @@ from main import (
     relation_sunburst_options,
     render_department_company_section,
     render_department_dream_section,
-    render_dream_company_preferences_section,
     render_department_section,
     render_dream_attainability_section,
     render_fear_factor_section,
@@ -74,6 +73,12 @@ def render_department_role_raw_section(data) -> None:
         )
 
 
+def render_dream_company_preferences_raw_section(data) -> None:
+    import main as app_main
+
+    app_main.render_dream_company_preferences_section(data)
+
+
 def main() -> None:
     st.set_page_config(page_title="Raw Data", layout="wide")
     st.title("Raw Data")
@@ -105,7 +110,7 @@ def main() -> None:
     render_program_exposure_relation_section(data)
     render_department_dream_section(data)
     render_dream_attainability_section(data)
-    render_dream_company_preferences_section(data)
+    render_dream_company_preferences_raw_section(data)
     render_year_info_section(data)
 
 
