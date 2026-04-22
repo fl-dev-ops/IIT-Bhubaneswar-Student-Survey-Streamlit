@@ -6,9 +6,10 @@ from main import (
     column_legend_frame,
     ensure_program_year,
     load_dataset,
+    relation_frame,
+    relation_sunburst_options,
     render_department_company_section,
     render_department_dream_section,
-    render_department_role_section,
     render_department_section,
     render_dream_attainability_section,
     render_fear_factor_section,
@@ -17,9 +18,59 @@ from main import (
     render_interview_exposure_section,
     render_program_exposure_relation_section,
     render_program_year_section,
+    stacked_bar_options,
+    st_echarts,
     render_support_needed_section,
     render_year_info_section,
 )
+
+
+def render_department_role_raw_section(data) -> None:
+    relation = relation_frame(
+        data,
+        "Department",
+        "Role Categories",
+        "Department",
+        "Role",
+    )
+    if relation.empty:
+        return
+
+    st.subheader("Department x Role Target")
+    st_echarts(
+        options=stacked_bar_options(
+            relation,
+            "Department",
+            "Role",
+            "Department x Role Target",
+        ),
+        height="520px",
+        key="raw-department-role-bar",
+    )
+
+    left_column, right_column = st.columns(2)
+    with left_column:
+        st_echarts(
+            options=relation_sunburst_options(
+                relation,
+                "Department",
+                "Role",
+                "Department to Role Sunburst",
+            ),
+            height="520px",
+            key="raw-department-role-sunburst",
+        )
+    with right_column:
+        st_echarts(
+            options=relation_sunburst_options(
+                relation,
+                "Role",
+                "Department",
+                "Role to Department Sunburst",
+            ),
+            height="520px",
+            key="raw-role-department-sunburst",
+        )
 
 
 def main() -> None:
@@ -49,7 +100,7 @@ def main() -> None:
     render_support_needed_section(data)
     render_interview_exposure_section(data)
     render_fear_support_section(data)
-    render_department_role_section(data)
+    render_department_role_raw_section(data)
     render_program_exposure_relation_section(data)
     render_department_dream_section(data)
     render_dream_attainability_section(data)

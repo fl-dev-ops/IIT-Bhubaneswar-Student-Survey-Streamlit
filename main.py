@@ -649,6 +649,21 @@ def program_year_sort_key(value: str) -> tuple[int, int, str]:
     return (99, 99, value)
 
 
+def program_year_display_label(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+
+    if value == "PhD":
+        return value
+
+    match = re.match(r"^(UG|PG)\s+(\d+)$", value)
+    if not match:
+        return value
+
+    program, year = match.groups()
+    return f"{program} Year {year}"
+
+
 def transform_dataframe(data: pd.DataFrame) -> pd.DataFrame:
     transformed = data.rename(columns=SHORT_HEADERS).copy()
 
@@ -1342,6 +1357,7 @@ def heatmap_options(
             "orient": "horizontal",
             "left": "center",
             "bottom": 20,
+            "inRange": {"color": ["#fff1f2", "#fda4af", "#dc2626"]},
         },
         "series": [
             {
@@ -1844,6 +1860,44 @@ def render_centered_chart(options: dict, *, height: str, width: str, key: str) -
         st_echarts(options=options, height=height, width=width, key=key)
 
 
+def chart_text_color() -> str:
+    theme_text_color = st.get_option("theme.textColor")
+    if theme_text_color:
+        return theme_text_color
+    return "#e5e7eb" if st.get_option("theme.base") == "dark" else "#111827"
+
+
+def full_width_relation_sunburst_options(
+    data: pd.DataFrame,
+    parent_column: str,
+    child_column: str,
+    title: str,
+) -> dict:
+    return {
+        "color": CHART_COLORS,
+        "title": {
+            "text": title,
+            "left": "center",
+            "textStyle": {"color": chart_text_color()},
+        },
+        "tooltip": {"trigger": "item", "formatter": "{b}: {c}%"},
+        "series": [
+            {
+                "type": "sunburst",
+                "radius": ["12%", "92%"],
+                "sort": None,
+                "itemStyle": {
+                    "borderRadius": 4,
+                    "borderWidth": 2,
+                    "borderColor": "#fff",
+                },
+                "label": {"rotate": "radial"},
+                "data": hierarchy_from_relations(data, parent_column, child_column),
+            }
+        ],
+    }
+
+
 def normalized_doughnut_options(data: pd.DataFrame, column: str, title: str) -> dict:
     total = int(data["Count"].sum()) if not data.empty else 0
     chart_data = data.copy()
@@ -1925,6 +1979,78 @@ def normalized_relation_sunburst_options(
                         ],
                     }
                     for parent in grouped[parent_column].drop_duplicates().tolist()
+                ],
+            }
+        ],
+    }
+
+
+def normalized_relation_sankey_options(
+    data: pd.DataFrame,
+    source_column: str,
+    target_column: str,
+    title: str,
+) -> dict:
+    grouped = (
+        data.groupby([source_column, target_column]).size().reset_index(name="Count")
+    )
+    if grouped.empty:
+        return {"title": {"text": title, "left": "center"}, "series": []}
+
+    source_totals = grouped.groupby(source_column)["Count"].transform("sum")
+    grouped["Percent"] = (grouped["Count"] / source_totals * 100).round(1)
+
+    source_nodes = grouped[source_column].drop_duplicates().tolist()
+    target_nodes = grouped[target_column].drop_duplicates().tolist()
+
+    source_ids = {value: f"source::{value}" for value in source_nodes}
+    target_ids = {value: f"target::{value}" for value in target_nodes}
+
+    return {
+        "color": CHART_COLORS,
+        "title": {
+            "text": title,
+            "left": "center",
+            "textStyle": {"color": chart_text_color()},
+        },
+        "tooltip": {"trigger": "item", "formatter": "{b}: {c}%"},
+        "series": [
+            {
+                "type": "sankey",
+                "layout": "none",
+                "nodeAlign": "left",
+                "emphasis": {"focus": "adjacency"},
+                "lineStyle": {"color": "source", "curveness": 0.5, "opacity": 0.35},
+                "label": {"color": chart_text_color()},
+                "data": [
+                    *[
+                        {
+                            "name": node_id,
+                            "label": {
+                                "formatter": label,
+                                "color": chart_text_color(),
+                            },
+                        }
+                        for label, node_id in source_ids.items()
+                    ],
+                    *[
+                        {
+                            "name": node_id,
+                            "label": {
+                                "formatter": label,
+                                "color": chart_text_color(),
+                            },
+                        }
+                        for label, node_id in target_ids.items()
+                    ],
+                ],
+                "links": [
+                    {
+                        "source": source_ids[row[source_column]],
+                        "target": target_ids[row[target_column]],
+                        "value": float(row["Percent"]),
+                    }
+                    for _, row in grouped.iterrows()
                 ],
             }
         ],
@@ -2067,45 +2193,26 @@ def render_barrier_section(data: pd.DataFrame) -> None:
         key="insights-fear-support-heatmap",
     )
 
-    normalized_pathways = []
-    for fear in fear_support_heatmap["Fear"].drop_duplicates().tolist():
-        fear_rows = fear_support_heatmap[fear_support_heatmap["Fear"] == fear]
-        normalized_pathways.append(
-            {
-                "name": fear,
-                "children": [
-                    {
-                        "name": row["Support"],
-                        "value": float(row["Percent"]),
-                    }
-                    for _, row in fear_rows.iterrows()
-                ],
-            }
-        )
-
-    render_centered_chart(
-        {
-            "color": CHART_COLORS,
-            "title": {"text": "Fear to Support Pathways", "left": "center"},
-            "tooltip": {"trigger": "item", "formatter": "{b}: {c}%"},
-            "series": [
-                {
-                    "type": "sunburst",
-                    "radius": ["18%", "88%"],
-                    "sort": None,
-                    "itemStyle": {
-                        "borderRadius": 4,
-                        "borderWidth": 2,
-                        "borderColor": "#fff",
-                    },
-                    "label": {"rotate": "radial"},
-                    "data": normalized_pathways,
-                }
-            ],
-        },
+    st_echarts(
+        options=full_width_relation_sunburst_options(
+            fear_support,
+            "Fear",
+            "Support",
+            "Fear to Support Sunburst",
+        ),
         height="900px",
-        width="900px",
         key="insights-fear-support-sunburst",
+    )
+
+    st_echarts(
+        options=normalized_relation_sankey_options(
+            fear_support,
+            "Fear",
+            "Support",
+            "Fear to Support Sankey",
+        ),
+        height="720px",
+        key="insights-fear-support-sankey",
     )
 
 
@@ -2116,19 +2223,34 @@ def render_information_section(data: pd.DataFrame) -> None:
     )
 
     relation = relation_heatmap_frame(
-        data, "Year", "Info Source Categories", "Year", "Source"
+        data,
+        "Program Year",
+        "Info Source Categories",
+        "Program Year",
+        "Source",
     )
-    relation["Year Label"] = relation["Year"].map(
-        lambda value: f"Year {int(float(value))}"
+    if relation.empty:
+        return
+
+    relation["Program Year Label"] = relation["Program Year"].map(
+        program_year_display_label
     )
+    program_year_order = [
+        program_year_display_label(value)
+        for value in sorted(
+            relation["Program Year"].dropna().astype(str).unique(),
+            key=program_year_sort_key,
+        )
+    ]
+
     st_echarts(
         options=heatmap_options(
             relation,
-            "Year Label",
+            "Program Year Label",
             "Source",
             "Count",
-            "Year x Info Sources",
-            x_order=["Year 1", "Year 2", "Year 3", "Year 4"],
+            "Program Year x Info Sources",
+            x_order=program_year_order,
         ),
         height="540px",
         key="insights-year-info-heatmap",
