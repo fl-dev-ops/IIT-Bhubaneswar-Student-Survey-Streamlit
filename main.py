@@ -1373,6 +1373,53 @@ def heatmap_options(
     }
 
 
+DREAM_COMPANY_BANDS = {
+    "Google": "Band 1",
+    "Amazon": "Band 1",
+    "Microsoft": "Band 1",
+    "DE Shaw": "Band 1",
+    "NVIDIA": "Band 1",
+    "Meta": "Band 1",
+    "Synopsys": "Band 1",
+    "Texas Instruments": "Band 1",
+    "AMD": "Band 1",
+    "Netflix": "Band 1",
+    "Cadence": "Band 1",
+    "Zomato": "Band 2",
+    "ZS Associates": "Band 2",
+    "BPCL": "Band 2",
+    "Caterpillar": "Band 2",
+    "HPCL": "Band 2",
+    "GE": "Band 2",
+    "Flipkart": "Band 2",
+    "Applied Materials": "Band 2",
+    "FactSet": "Band 2",
+    "Vedanta": "Band 2",
+    "Reliance": "Band 2",
+    "Visa": "Band 2",
+    "Hitachi": "Band 2",
+    "Tata Steel": "Band 2",
+    "Jindal Steel": "Band 2",
+    "Schneider Electric": "Band 2",
+    "Maruti Suzuki": "Band 2",
+    "Skyroot": "Band 2",
+    "Tiger Analytics": "Band 2",
+    "Samsung": "Band 2",
+    "Red Hat": "Band 2",
+    "Mozilla": "Band 2",
+    "Micron": "Band 2",
+    "L&T": "Band 2",
+    "BNY Mellon": "Band 2",
+    "BEL": "Band 2",
+    "Adobe": "Band 2",
+    "Lenskart": "Band 2",
+    "TCS": "Band 3",
+    "Accenture": "Band 3",
+    "Infosys": "Band 3",
+    "GMDC": "Band 3",
+}
+
+
 def relation_heatmap_frame(
     data: pd.DataFrame,
     left_column: str,
@@ -2216,6 +2263,86 @@ def render_barrier_section(data: pd.DataFrame) -> None:
     )
 
 
+def render_dream_company_preferences_section(data: pd.DataFrame) -> None:
+    dream_companies = exploded_list_frame(data, "Dream Companies", "Dream Company")
+    if dream_companies.empty:
+        return
+
+    company_counts = distribution_frame(dream_companies, "Dream Company")
+    company_counts["Band"] = company_counts["Dream Company"].map(DREAM_COMPANY_BANDS)
+    company_counts["Band"] = company_counts["Band"].fillna("Unassigned")
+
+    band_counts = (
+        company_counts.groupby("Band", as_index=False)["Count"].sum().rename(
+            columns={"Band": "Dream Band"}
+        )
+    )
+    band_order = ["Band 1", "Band 2", "Band 3", "Unassigned"]
+    band_counts["sort_key"] = band_counts["Dream Band"].map(
+        {label: index for index, label in enumerate(band_order)}
+    )
+    band_counts = band_counts.sort_values(["sort_key", "Count"]).drop(
+        columns="sort_key"
+    )
+
+    band_company_counts = (
+        company_counts.groupby("Band", as_index=False)["Dream Company"]
+        .nunique()
+        .rename(columns={"Dream Company": "Distinct Companies"})
+    )
+    band_company_counts["sort_key"] = band_company_counts["Band"].map(
+        {label: index for index, label in enumerate(band_order)}
+    )
+    band_company_counts = band_company_counts.sort_values("sort_key").drop(
+        columns="sort_key"
+    )
+    band_company_summary = ", ".join(
+        f"{row['Band']}: {int(row['Distinct Companies'])} companies"
+        for _, row in band_company_counts.iterrows()
+    )
+
+    st.header("Dream Company Preferences")
+    st.write(
+        "Student aspiration is concentrated around Band 1 and Band 2 employers, with Band 2 carrying the largest share of dream-company selections overall."
+    )
+    st.caption(
+        "This chart ranks the most frequently mentioned dream companies across all student responses. Higher bars mean more students explicitly named that company as a target."
+    )
+    st_echarts(
+        options=bar_chart_options(
+            company_counts.head(10),
+            "Dream Company",
+            "Top 10 Dream Companies",
+        ),
+        height="420px",
+        key="insights-dream-company-top10-bar",
+    )
+    st.caption(
+        "This chart groups all dream-company selections into Band 1, Band 2, and Band 3. It shows where student demand is concentrated, based on total selections rather than the number of companies available in each band."
+    )
+    st_echarts(
+        options=bar_chart_options(
+            band_counts,
+            "Dream Band",
+            "Dream Company Selections by Band",
+        ),
+        height="380px",
+        key="insights-dream-company-band-bar",
+    )
+
+    summary = company_counts.rename(columns={"Dream Company": "Company"})
+    summary["Share"] = (summary["Count"] / summary["Count"].sum() * 100).round(1)
+    st.caption(
+        "Band totals count dream-company selections, not the number of distinct companies in each band."
+    )
+    st.caption(f"Distinct companies by band: {band_company_summary}.")
+    st.dataframe(
+        summary[["Company", "Band", "Count", "Share"]],
+        width="stretch",
+        hide_index=True,
+    )
+
+
 def render_information_section(data: pd.DataFrame) -> None:
     st.header("Information Pathways")
     st.write(
@@ -2439,6 +2566,8 @@ def main() -> None:
     render_header(data)
     st.markdown("---")
     render_cohort_section(data)
+    st.markdown("---")
+    render_dream_company_preferences_section(data)
     st.markdown("---")
     render_attainability_section(data)
     st.markdown("---")

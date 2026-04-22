@@ -10,6 +10,7 @@ from main import (
     relation_sunburst_options,
     render_department_company_section,
     render_department_dream_section,
+    render_dream_company_preferences_section,
     render_department_section,
     render_dream_attainability_section,
     render_fear_factor_section,
@@ -104,6 +105,7 @@ def main() -> None:
     render_program_exposure_relation_section(data)
     render_department_dream_section(data)
     render_dream_attainability_section(data)
+    render_dream_company_preferences_section(data)
     render_year_info_section(data)
 
 
